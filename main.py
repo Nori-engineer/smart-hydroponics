@@ -12,7 +12,7 @@ WIFI_PASSWORD = "9e69c0bce599a"
 GAS_URL = "https://script.google.com/macros/s/AKfycbxOctbQIPjQPoUWXdr5x4OlJCWJCcs9L6SlbuVHtsyKR0epLcs5CkmhO1Si4L6lTHI/exec"
 
 # 2. OTA用: GitHub の main.py Raw URL
-GITHUB_RAW_URL = "https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/main.py"
+GITHUB_RAW_URL = "https://raw.githubusercontent.com/Nori-engineer/smart-hydroponics/refs/heads/main/main.py"
 
 # 送信間隔（秒）
 SEND_INTERVAL = 300  # 5分（300秒）ごとにデータ送信
@@ -135,4 +135,6 @@ def main():
         time.sleep(10)
 
 if __name__ == "__main__":
+    main()
+
     main()
