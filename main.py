@@ -18,7 +18,7 @@ GITHUB_RAW_URL = "https://raw.githubusercontent.com/Nori-engineer/smart-hydropon
 USB2_POWER_PIN = 13
 
 # 送信間隔（秒）
-SEND_INTERVAL = 300  # 5分（300秒）ごとにデータ送信
+SEND_INTERVAL = 3600  # 60分（3600秒）ごとにデータ送信
 OTA_CHECK_INTERVAL = 3600 # 1時間（3600秒）ごとにOTAチェック
 
 
