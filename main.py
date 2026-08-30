@@ -11,35 +11,46 @@ WIFI_PASSWORD = "9e69c0bce599a"
 GAS_URL = "https://script.google.com/macros/s/AKfycbxOctbQIPjQPoUWXdr5x4OlJCWJCcs9L6SlbuVHtsyKR0epLcs5CkmhO1Si4L6lTHI/exec"
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/Nori-engineer/smart-hydroponics/refs/heads/main/main.py"
 
-USB2_POWER_PIN = 13
+USB2_POWER_PIN = 13          # エアポンプ
+TWELVEV_POWER_PIN = 14       # 12V水中ポンプ
 
-SEND_INTERVAL = 3600       # 60分（3600秒）
-OTA_CHECK_INTERVAL = 3600  # 1時間（3600秒）
-HTTP_TIMEOUT = 15          # HTTP通信のタイムアウト（秒）
+SEND_INTERVAL = 3600         # 60分ごとに循環セットを実行
+AIR_OFFSET = 300             # 水中ポンプの5分後にエアポンプを起動
+
+OTA_CHECK_INTERVAL = 3600
+HTTP_TIMEOUT = 15
 
 
-# --- 1. エアポンプ駆動（WDT餌やり対応） ---
+# --- エアポンプ ---
 def run_air_pump(pin_num=USB2_POWER_PIN, duration=10, wdt=None):
-    print("エアポンプ(USB2)を起動します...")
-    pump_pin = Pin(pin_num, Pin.OUT)
-    pump_pin.value(1)
-    
-    # 1秒ごとに分割してWDTをクリアしながら待機
+    print("エアポンプを起動します...")
+    p = Pin(pin_num, Pin.OUT)
+    p.value(1)
     for _ in range(duration):
         if wdt:
             wdt.feed()
         time.sleep(1)
+    p.value(0)
+    print("エアポンプを停止しました。")
 
-    pump_pin.value(0)
-    print("エアポンプ(USB2)を停止しました。")
+
+# --- 12V水中ポンプ ---
+def run_12v_pump(pin_num=TWELVEV_POWER_PIN, duration=10, wdt=None):
+    print("12V 水中ポンプを起動します...")
+    p = Pin(pin_num, Pin.OUT)
+    p.value(1)
+    for _ in range(duration):
+        if wdt:
+            wdt.feed()
+        time.sleep(1)
+    p.value(0)
+    print("12V 水中ポンプを停止しました。")
 
 
-# --- 2. Wi-Fi 接続（省電力無効化・WDT餌やり・ステータスチェック対応） ---
+# --- Wi-Fi ---
 def connect_wifi(wdt=None):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    
-    # Pico W / Pico 2 W の Wi-Fi 省電力モードを無効化（接続安定化）
     try:
         wlan.config(pm=0xa11154)
     except Exception:
@@ -58,17 +69,12 @@ def connect_wifi(wdt=None):
         while timeout > 0:
             if wdt:
                 wdt.feed()
-            
             status = wlan.status()
-            # 接続完了 (STAT_GOT_IP = 3)
             if status == 3 or wlan.isconnected():
                 break
-            
-            # 接続失敗エラー（パスワード不一致など negative status）
             if status < 0:
                 print(f"\nWi-Fi接続失敗 (ステータス: {status})")
                 return False
-
             time.sleep(1)
             print(".", end="")
             timeout -= 1
@@ -82,7 +88,7 @@ def connect_wifi(wdt=None):
         return False
 
 
-# --- 3. OTA更新処理 ---
+# --- OTA ---
 def check_and_apply_ota(wdt=None):
     print("OTA更新をチェック中...")
     if wdt:
@@ -93,7 +99,6 @@ def check_and_apply_ota(wdt=None):
         res = requests.get(GITHUB_RAW_URL, timeout=HTTP_TIMEOUT)
         if res.status_code == 200:
             new_code = res.text
-            
             try:
                 with open("main.py", "r") as f:
                     current_code = f.read()
@@ -121,7 +126,7 @@ def check_and_apply_ota(wdt=None):
                 pass
 
 
-# --- 4. スプレッドシート送信処理 ---
+# --- スプレッドシート送信 ---
 def send_to_spreadsheet(v_bus, current, power, wdt=None):
     if wdt:
         wdt.feed()
@@ -150,18 +155,16 @@ def send_to_spreadsheet(v_bus, current, power, wdt=None):
                 pass
 
 
-# --- メイン処理 ---
+# --- メイン ---
 def main():
     Pin(USB2_POWER_PIN, Pin.OUT).value(0)
+    Pin(TWELVEV_POWER_PIN, Pin.OUT).value(0)
 
-    # 1. 最初に Wi-Fi 接続を試行（WDT有効化前に行うことで初期接続時のリセットループを防止）
     connect_wifi()
 
-    # 2. ネットワーク初期化後に Watchdog Timer を開始 (8.3秒)
     wdt = WDT(timeout=8300)
     wdt.feed()
 
-    # INA219 の初期化
     ina = None
     try:
         i2c = I2C(0, scl=Pin(5), sda=Pin(4), freq=400000)
@@ -172,48 +175,35 @@ def main():
     check_and_apply_ota(wdt=wdt)
     wdt.feed()
 
-    # 起動直後に初回送信を実行するため last_send_time は 0 で開始
     last_send_time = 0
+    last_air_time = None
     last_ota_time = time.time()
 
     while True:
         wdt.feed()
         current_time = time.time()
 
-        # 定期送信処理
+        # --- 12V水中ポンプ（60分ごと） ---
         if current_time - last_send_time >= SEND_INTERVAL:
-            if not network.WLAN(network.STA_IF).isconnected():
-                connect_wifi(wdt=wdt)
-                wdt.feed()
-
-            run_air_pump(USB2_POWER_PIN, duration=10, wdt=wdt)
-            wdt.feed()
-
-            if ina:
-                try:
-                    v_bus = ina.get_bus_voltage()
-                    current = ina.get_current()
-                    power = ina.get_power()
-                    print(f"計測値 -> 電圧: {v_bus:.2f}V | 電流: {current:.1f}mA | 電力: {power:.1f}mW")
-                    send_to_spreadsheet(v_bus, current, power, wdt=wdt)
-                except Exception as e:
-                    print("計測または送信失敗:", e)
-            else:
-                print("INA219 が利用できないため計測をスキップします。")
-
-            wdt.feed()
+            run_12v_pump(TWELVEV_POWER_PIN, duration=10, wdt=wdt)
             last_send_time = current_time
+            last_air_time = current_time + AIR_OFFSET   # ★ エアポンプの予約
 
-        # 定期OTAチェック処理
+        # --- 水中ポンプの5分後にエアポンプ ---
+        if last_air_time and current_time >= last_air_time:
+            run_air_pump(USB2_POWER_PIN, duration=10, wdt=wdt)
+            last_air_time = None
+
+        # --- OTAチェック ---
         if current_time - last_ota_time >= OTA_CHECK_INTERVAL:
             check_and_apply_ota(wdt=wdt)
-            wdt.feed()
             last_ota_time = current_time
 
-        # メインループ待機（1秒ごとに WDT を feed）
+        # --- 待機 ---
         for _ in range(10):
             wdt.feed()
             time.sleep(1)
+
 
 if __name__ == "__main__":
     main()
