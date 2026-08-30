@@ -189,6 +189,19 @@ def main():
             last_send_time = current_time
             last_air_time = current_time + AIR_OFFSET   # ★ エアポンプの予約
 
+            # --- 計測＋送信（復活） ---
+            if ina:
+                try:
+                    v_bus = ina.get_bus_voltage()
+                    current = ina.get_current()
+                    power = v_bus * current
+                    print(f"計測値 -> 電圧: {v_bus:.2f}V | 電流: {current:.1f}mA | 電力: {power:.1f}mW")
+                    send_to_spreadsheet(v_bus, current, power, wdt=wdt)
+                except Exception as e:
+                    print("計測または送信失敗:", e)
+            else:
+                print("INA219 が利用できないため計測をスキップします。")
+
         # --- 水中ポンプの5分後にエアポンプ ---
         if last_air_time and current_time >= last_air_time:
             run_air_pump(USB2_POWER_PIN, duration=10, wdt=wdt)
