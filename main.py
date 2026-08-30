@@ -175,9 +175,11 @@ def main():
     check_and_apply_ota(wdt=wdt)
     wdt.feed()
 
-    last_send_time = 0
+    # 起動直後に初回実行されるよう初期値を設定
+    current_now = time.time()
+    last_send_time = current_now - SEND_INTERVAL
     last_air_time = None
-    last_ota_time = time.time()
+    last_ota_time = current_now
 
     while True:
         wdt.feed()
@@ -185,11 +187,14 @@ def main():
 
         # --- 12V水中ポンプ（60分ごと） ---
         if current_time - last_send_time >= SEND_INTERVAL:
+            # 送信前にWi-Fi接続状態を確認・再接続
+            connect_wifi(wdt=wdt)
+
             run_12v_pump(TWELVEV_POWER_PIN, duration=10, wdt=wdt)
             last_send_time = current_time
-            last_air_time = current_time + AIR_OFFSET   # ★ エアポンプの予約
+            last_air_time = current_time + AIR_OFFSET   # エアポンプの予約 (5分後)
 
-            # --- 計測＋送信（復活） ---
+            # --- 計測＋送信 ---
             if ina:
                 try:
                     v_bus = ina.get_bus_voltage()
@@ -200,7 +205,8 @@ def main():
                 except Exception as e:
                     print("計測または送信失敗:", e)
             else:
-                print("INA219 が利用できないため計測をスキップします。")
+                print("警告: INA219 が初期化されていないため、ダミー値(0.0)で送信テストを行います。")
+                send_to_spreadsheet(0.0, 0.0, 0.0, wdt=wdt)
 
         # --- 水中ポンプの5分後にエアポンプ ---
         if last_air_time and current_time >= last_air_time:
@@ -209,6 +215,7 @@ def main():
 
         # --- OTAチェック ---
         if current_time - last_ota_time >= OTA_CHECK_INTERVAL:
+            connect_wifi(wdt=wdt)
             check_and_apply_ota(wdt=wdt)
             last_ota_time = current_time
 
