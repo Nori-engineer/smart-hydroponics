@@ -12,7 +12,7 @@ GAS_URL = "https://script.google.com/macros/s/AKfycbxOctbQIPjQPoUWXdr5x4OlJCWJCc
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/Nori-engineer/smart-hydroponics/refs/heads/main/main.py"
 
 USB2_POWER_PIN = 13          # エアポンプ
-TWELVEV_POWER_PIN = 14       # 12V水中ポンプ
+FIVE_POWER_PIN = 14       # 5V水中ポンプ
 
 SEND_INTERVAL = 3600         # 60分ごとに循環セットを実行
 AIR_OFFSET = 300             # 水中ポンプの5分後にエアポンプを起動
@@ -34,8 +34,8 @@ def run_air_pump(pin_num=USB2_POWER_PIN, duration=10, wdt=None):
     print("エアポンプを停止しました。")
 
 
-# --- 12V水中ポンプ ---
-def run_12v_pump(pin_num=TWELVEV_POWER_PIN, duration=10, wdt=None):
+# --- 5V水中ポンプ ---
+def run_5v_pump(pin_num=FIVE_POWER_PIN, duration=10, wdt=None):
     print("12V 水中ポンプを起動します...")
     p = Pin(pin_num, Pin.OUT)
     p.value(1)
@@ -44,7 +44,7 @@ def run_12v_pump(pin_num=TWELVEV_POWER_PIN, duration=10, wdt=None):
             wdt.feed()
         time.sleep(1)
     p.value(0)
-    print("12V 水中ポンプを停止しました。")
+    print("5V 水中ポンプを停止しました。")
 
 
 # --- Wi-Fi ---
@@ -158,7 +158,7 @@ def send_to_spreadsheet(v_bus, current, power, wdt=None):
 # --- メイン ---
 def main():
     Pin(USB2_POWER_PIN, Pin.OUT).value(0)
-    Pin(TWELVEV_POWER_PIN, Pin.OUT).value(0)
+    Pin(FIVE_POWER_PIN, Pin.OUT).value(0)
 
     connect_wifi()
 
@@ -185,12 +185,12 @@ def main():
         wdt.feed()
         current_time = time.time()
 
-        # --- 12V水中ポンプ（60分ごと） ---
+        # --- 5V水中ポンプ（60分ごと） ---
         if current_time - last_send_time >= SEND_INTERVAL:
             # 送信前にWi-Fi接続状態を確認・再接続
             connect_wifi(wdt=wdt)
 
-            run_12v_pump(TWELVEV_POWER_PIN, duration=10, wdt=wdt)
+            run_5v_pump(FIVE_POWER_PIN, duration=10, wdt=wdt)
             last_send_time = current_time
             last_air_time = current_time + AIR_OFFSET   # エアポンプの予約 (5分後)
 
@@ -227,3 +227,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
