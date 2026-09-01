@@ -12,7 +12,7 @@ GAS_URL = "https://script.google.com/macros/s/AKfycbxOctbQIPjQPoUWXdr5x4OlJCWJCc
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/Nori-engineer/smart-hydroponics/refs/heads/main/main.py"
 
 USB2_POWER_PIN = 13          # エアポンプ
-FIVE_POWER_PIN = 14       # 5V水中ポンプ
+FIVE_POWER_PIN = 14          # 5V水中ポンプ
 
 SEND_INTERVAL = 3600         # 60分ごとに循環セットを実行
 AIR_OFFSET = 300             # 水中ポンプの5分後にエアポンプを起動
@@ -36,7 +36,7 @@ def run_air_pump(pin_num=USB2_POWER_PIN, duration=10, wdt=None):
 
 # --- 5V水中ポンプ ---
 def run_5v_pump(pin_num=FIVE_POWER_PIN, duration=10, wdt=None):
-    print("12V 水中ポンプを起動します...")
+    print("5V 水中ポンプを起動します...")
     p = Pin(pin_num, Pin.OUT)
     p.value(1)
     for _ in range(duration):
@@ -98,10 +98,11 @@ def check_and_apply_ota(wdt=None):
     try:
         res = requests.get(GITHUB_RAW_URL, timeout=HTTP_TIMEOUT)
         if res.status_code == 200:
-            new_code = res.text
+            # 改行コードを '\n' に統一して判定時のミスマッチを防止
+            new_code = res.text.replace("\r\n", "\n")
             try:
                 with open("main.py", "r") as f:
-                    current_code = f.read()
+                    current_code = f.read().replace("\r\n", "\n")
             except OSError:
                 current_code = ""
 
@@ -227,4 +228,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
